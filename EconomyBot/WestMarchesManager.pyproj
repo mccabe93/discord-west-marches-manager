@@ -3,13 +3,14 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>3655ffab-3821-4082-9b24-ca6416fa8b70</ProjectGuid>
-    <ProjectHome>.</ProjectHome>
-    <StartupFile>EconomyBot.py</StartupFile>
+    <ProjectHome>
+    </ProjectHome>
+    <StartupFile>WestMarchesManager.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
-    <Name>EconomyBot</Name>
+    <Name>WestMarchesManager</Name>
     <RootNamespace>EconomyBot</RootNamespace>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -21,16 +22,7 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AdminBot.py">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="EconomyBot.py" />
-    <Compile Include="main.py">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="QuestBot.py">
-      <SubType>Code</SubType>
-    </Compile>
+    <Compile Include="WestMarchesManager.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

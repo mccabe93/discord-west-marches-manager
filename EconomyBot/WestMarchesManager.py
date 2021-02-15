@@ -88,6 +88,83 @@ async def designate(ctx, name):
         fob.write(io.getvalue())
     return
 
+# Create a character
+@bot.command()
+async def create(ctx, name, backstory):
+    if(ctx.channel.name != CharacterCreationChannel):
+        return
+    folder = GetCharacterFolder(ctx, name)
+    characterDictionary = {"Name": str(name), "Backstory": str(backstory), "XP": str(900)}
+    
+    io = StringIO()
+    data = json.dump(characterDictionary, io)
+
+    with open(folder + "/" + characterDictionary["Name"] + ".json", "w") as fob:
+        fob.write(io.getvalue())
+
+    DoDeposit(ctx, folder, characterDictionary["Name"], "0")
+
+    await ctx.channel.send("You created " + name + ".")
+
+# Get the current inventory of a character.
+@bot.command()
+async def inventory(ctx, name):
+    if(ctx.channel.name != InventoryManagementChannel):
+        return
+    itemDictionary = {"GoldBalance": "0", "Items": ""}
+    if(os.path.exists(GetCharacterFolder(ctx, name) + "/balance.json")):
+        with open(GetCharacterFolder(ctx, name) + "/balance.json", "r+") as fob:
+            itemDictionary = json.load(fob)
+                
+    await ctx.channel.send(str(ctx.author) + " your character " + name + "'s current balance is. . . ")
+    await ctx.channel.send(itemDictionary["GoldBalance"] + "gp")
+    await ctx.channel.send("Items. . .")
+    itemList = itemDictionary["Items"].split('|')
+    for item in itemList:
+        if item != "":
+            await ctx.channel.send(item)
+
+# Deposit an item or money into a character's account
+@bot.command()
+async def deposit(ctx, name, amount):
+    if(ctx.channel.name != InventoryManagementChannel):
+        return
+    
+    folder = GetCharacterFolder(ctx, name)
+    if(os.path.exists(folder) == False):
+        await ctx.channel.send("Could not find a characeter named " + name)
+        return
+    
+    await ctx.channel.send("You deposited " + DoDeposit(ctx, folder, name, amount))
+
+# Withdraw an item or money from a character's account.
+@bot.command()
+async def withdraw(ctx, name, amount):
+    if(ctx.channel.name != InventoryManagementChannel):
+        return
+    
+    folder = GetCharacterFolder(ctx, name)
+    if(os.path.exists(folder) == False):
+        await ctx.channel.send("Could not find a characeter named " + name)
+        return
+    
+    await ctx.channel.send(DoWithdraw(ctx, folder, name, amount))
+
+# WIP. Transfer an item or money from one player to another.
+@bot.command()
+async def give(ctx, amount, player, name):
+    if(ctx.channel.name != InventoryManagementChannel):
+        return
+    #withdraw(ctx, amount)
+    s = str(player)[3:-1]
+    person = bot.get_all_members()
+     # await bot.fetch_user(int(s))
+    if person is None:
+        await ctx.channel.send(player + " does not exist.")
+        return
+    await ctx.channel.send(person + " vs " + str(ctx.author))
+    return
+
 # Create a quest
 @bot.command()
 async def createquest(ctx, name, description, tier, time, maxPlayers = 5, additionalGold = "", additionalItems = "",  reservedPlayers = ""):
@@ -112,80 +189,8 @@ async def createquest(ctx, name, description, tier, time, maxPlayers = 5, additi
 
     with open(file, "w") as fob:
         fob.write(io.getvalue())
-
-        
-# Create a quest
-@bot.command()
-async def unsignup(ctx, characterName, questName):
-    if(ctx.channel.name != QuestPostingChannel):
-        return
     
-    file = CreateOrExistsQuest(ctx, questName)
-    if(os.path.exists(file) == False):
-        await ctx.channel.send("Couldn't find a quest called " + questName + ".")
-        return
-
-    questDictionary = {"Name": "", "Tier": "", "Time": "", "Description": "", "AdditionalGold": "", "AdditionalItems": "", "MaxPlayers": "",  "Players": "", "MessageID": ""}
-
-    with open(file, "r") as fob:
-        questDictionary = json.load(fob)
-    
-    signupval = characterName + " (" + str(ctx.author) + "),"
-    if signupval in questDictionary["Players"]:
-        questDictionary["Players"] = questDictionary["Players"].replace(signupval, '') 
-        
-    io = StringIO()
-    data = json.dump(questDictionary, io)
-
-    with open(file, "w") as fob:
-        fob.write(io.getvalue())
-    msg = await ctx.fetch_message(int(questDictionary["MessageID"]))
-    await msg.edit(content=GetQuestMessage(questDictionary))
-
-# Create a quest
-@bot.command()
-async def signup(ctx, characterName, questName):
-    if(ctx.channel.name != QuestPostingChannel):
-        return
-    
-    file = CreateOrExistsQuest(ctx, questName)
-    if(os.path.exists(file) == False):
-        await ctx.channel.send("Couldn't find a quest called " + questName + ".")
-        return
-
-    questDictionary = {"Name": "", "Tier": "", "Time": "", "Description": "", "AdditionalGold": "", "AdditionalItems": "", "MaxPlayers": "",  "Players": "", "MessageID": ""}
-
-    with open(file, "r") as fob:
-        questDictionary = json.load(fob)
-       
-    if(GetCharacterExists(ctx, characterName) == False):
-        await ctx.channel.send("You do not have a character named " + characterName + ".")
-        return
-
-    folder = GetCharacterFolder(ctx, characterName)
-        
-    reserves = questDictionary["Players"].split(',')
-    reserves.remove("")
-    reservesCount = len(reserves)
-    
-    if(reservesCount >= int(questDictionary["MaxPlayers"])):
-        await ctx.channel.send(questDictionary["Name"] + " is full.")
-        return
-
-    signupval = str(ctx.author)
-    if signupval in questDictionary["Players"]:
-        return
-    questDictionary["Players"] += characterName + " (" + str(ctx.author) + "),"
-    
-    io = StringIO()
-    data = json.dump(questDictionary, io)
-
-    with open(file, "w") as fob:
-        fob.write(io.getvalue())
-    msg = await ctx.fetch_message(int(questDictionary["MessageID"]))
-    await msg.edit(content=GetQuestMessage(questDictionary))
-    
-# Finish a quest
+# Finish a quest and dsitribute rewards.
 @bot.command()
 async def finishquest(ctx, questName):
     if(ctx.channel.name != QuestPostingChannel):
@@ -228,7 +233,23 @@ async def finishquest(ctx, questName):
             inventoryData = json.load(fob)
 
         currentGold = int(inventoryData["GoldBalance"])
-        inventoryData["GoldBalance"] = str(currentGold + 100 * characterLevel)
+        additionalGold = currentGold + 100 * characterLevel
+
+        if(questDictionary["AdditionalGold"] != ""):
+            additionalGold += int(questDictionary["AdditionalGold"])
+            
+        inventoryData["GoldBalance"] = str(currentGold + additionalGold)
+
+        currentItems = inventoryData["Items"]
+
+        if(currentItems.endswith('|') == False):
+            currentItems += "|"
+
+        additionalItems = ""
+        if(questDictionary["AdditionalItems"] != ""):
+            additionalItems += questDictionary["AdditionalItems"]
+
+        inventoryData["Items"] = currentItems + additionalItems
         
         io = StringIO()
         data = json.dump(inventoryData, io)
@@ -236,45 +257,79 @@ async def finishquest(ctx, questName):
         with open(characterInventory, "w") as fob:
             fob.write(io.getvalue())
 
-def GetCharacterLevel(xp):
-    global LeveltoXP
-    lastLevel = 1
-    for xpBracket in LeveltoXP:
-        if(xpBracket > xp):
-            return lastLevel
-        lastLevel = LeveltoXP[xpBracket]
-    return lastLevel
+        await ctx.channel.send("The quest " + questName + " has been completed.  Rewards have been distributed to: " + questDictionary["Players"])
 
-# Create a character
+# Player signup for a quest
 @bot.command()
-async def create(ctx, name, backstory):
-    if(ctx.channel.name != CharacterCreationChannel):
+async def signup(ctx, characterName, questName):
+    if(ctx.channel.name != QuestPostingChannel):
         return
-    folder = GetCharacterFolder(ctx, name)
-    characterDictionary = {"Name": str(name), "Backstory": str(backstory), "XP": str(900)}
+    
+    file = CreateOrExistsQuest(ctx, questName)
+    if(os.path.exists(file) == False):
+        await ctx.channel.send("Couldn't find a quest called " + questName + ".")
+        return
+
+    questDictionary = {"Name": "", "Tier": "", "Time": "", "Description": "", "AdditionalGold": "", "AdditionalItems": "", "MaxPlayers": "",  "Players": "", "MessageID": ""}
+
+    with open(file, "r") as fob:
+        questDictionary = json.load(fob)
+       
+    if(GetCharacterExists(ctx, characterName) == False):
+        await ctx.channel.send("You do not have a character named " + characterName + ".")
+        return
+
+    folder = GetCharacterFolder(ctx, characterName)
+        
+    reserves = questDictionary["Players"].split(',')
+    reserves.remove("")
+    reservesCount = len(reserves)
+    
+    if(reservesCount >= int(questDictionary["MaxPlayers"])):
+        await ctx.channel.send(questDictionary["Name"] + " is full.")
+        return
+
+    signupval = str(ctx.author)
+    if signupval in questDictionary["Players"]:
+        return
+    questDictionary["Players"] += characterName + " (" + str(ctx.author) + "),"
     
     io = StringIO()
-    data = json.dump(characterDictionary, io)
+    data = json.dump(questDictionary, io)
 
-    with open(folder + "/" + characterDictionary["Name"] + ".json", "w") as fob:
+    with open(file, "w") as fob:
         fob.write(io.getvalue())
+    msg = await ctx.fetch_message(int(questDictionary["MessageID"]))
+    await msg.edit(content=GetQuestMessage(questDictionary))
 
-    DoDeposit(ctx, folder, characterDictionary["Name"], "0")
-
-    await ctx.channel.send("You created " + name + ".")
-
-
+        
+# Player unsignup for quest
 @bot.command()
-async def deposit(ctx, name, amount):
-    if(ctx.channel.name != InventoryManagementChannel):
+async def unsignup(ctx, characterName, questName):
+    if(ctx.channel.name != QuestPostingChannel):
         return
     
-    folder = GetCharacterFolder(ctx, name)
-    if(os.path.exists(folder) == False):
-        await ctx.channel.send("Could not find a characeter named " + name)
+    file = CreateOrExistsQuest(ctx, questName)
+    if(os.path.exists(file) == False):
+        await ctx.channel.send("Couldn't find a quest called " + questName + ".")
         return
+
+    questDictionary = {"Name": "", "Tier": "", "Time": "", "Description": "", "AdditionalGold": "", "AdditionalItems": "", "MaxPlayers": "",  "Players": "", "MessageID": ""}
+
+    with open(file, "r") as fob:
+        questDictionary = json.load(fob)
     
-    await ctx.channel.send("You deposited " + DoDeposit(ctx, folder, name, amount))
+    signupval = characterName + " (" + str(ctx.author) + "),"
+    if signupval in questDictionary["Players"]:
+        questDictionary["Players"] = questDictionary["Players"].replace(signupval, '') 
+        
+    io = StringIO()
+    data = json.dump(questDictionary, io)
+
+    with open(file, "w") as fob:
+        fob.write(io.getvalue())
+    msg = await ctx.fetch_message(int(questDictionary["MessageID"]))
+    await msg.edit(content=GetQuestMessage(questDictionary))
 
 def DoDeposit(ctx, folder, name, amount):
     isMoney = False
@@ -307,18 +362,6 @@ def DoDeposit(ctx, folder, name, amount):
     with open(balanceFile, "w") as fob:
         fob.write(io.getvalue())
     return logMessage
-
-@bot.command()
-async def withdraw(ctx, name, amount):
-    if(ctx.channel.name != InventoryManagementChannel):
-        return
-    
-    folder = GetCharacterFolder(ctx, name)
-    if(os.path.exists(folder) == False):
-        await ctx.channel.send("Could not find a characeter named " + name)
-        return
-    
-    await ctx.channel.send(DoWithdraw(ctx, folder, name, amount))
     
 def DoWithdraw(ctx, folder, name, amount):
     isMoney = False
@@ -356,36 +399,6 @@ def DoWithdraw(ctx, folder, name, amount):
     with open(balanceFile, "w") as fob:
         fob.write(io.getvalue())
     return logMessage
-@bot.command()
-async def inventory(ctx, name):
-    if(ctx.channel.name != InventoryManagementChannel):
-        return
-    itemDictionary = {"GoldBalance": "0", "Items": ""}
-    if(os.path.exists(GetCharacterFolder(ctx, name) + "/balance.json")):
-        with open(GetCharacterFolder(ctx, name) + "/balance.json", "r+") as fob:
-            itemDictionary = json.load(fob)
-                
-    await ctx.channel.send(str(ctx.author) + " your character " + name + "'s current balance is. . . ")
-    await ctx.channel.send(itemDictionary["GoldBalance"] + "gp")
-    await ctx.channel.send("Items. . .")
-    itemList = itemDictionary["Items"].split('|')
-    for item in itemList:
-        if item != "":
-            await ctx.channel.send(item)
-
-@bot.command()
-async def give(ctx, amount, player, name):
-    if(ctx.channel.name != InventoryManagementChannel):
-        return
-    #withdraw(ctx, amount)
-    s = str(player)[3:-1]
-    person = bot.get_all_members()
-     # await bot.fetch_user(int(s))
-    if person is None:
-        await ctx.channel.send(player + " does not exist.")
-        return
-    await ctx.channel.send(person + " vs " + str(ctx.author))
-    return
 
 def GetQuestMessage(questDictionary):
     signedUp = ""
@@ -399,6 +412,15 @@ def GetQuestMessage(questDictionary):
         signedUp += "\n" + str(i + 1) + ". " + playerName
 
     return questDictionary["Name"] + " (Tier " + questDictionary["Tier"] + ")\n" + questDictionary["Time"] + "\n\n" + questDictionary["Description"] + "\n\nPlayers: " + signedUp
+
+def GetCharacterLevel(xp):
+    global LeveltoXP
+    lastLevel = 1
+    for xpBracket in LeveltoXP:
+        if(xpBracket > xp):
+            return lastLevel
+        lastLevel = LeveltoXP[xpBracket]
+    return lastLevel
 
 def ConvertJSONtoPythonDictionary(data):
     outDict = dict()
@@ -453,6 +475,9 @@ def CreateOrExistsSetupFolder():
         fob.close()
         return False
     return True
+
+def CleanupInventory(invStr):
+    return invStr.replace('||', '|')
 
 def TryLoadSetup():
     global QuestCreationChannel
