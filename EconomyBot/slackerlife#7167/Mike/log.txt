@@ -20,3 +20,5 @@
 2021-02-13 01:51:06.335604: [WITHDRAW] 50 gold cannot be withdrawn due to insufficient funds.
 2021-02-15 13:10:40.089542: [WITHDRAW] 10000 gold has been withdrawn. Current balance: 3200
 2021-02-15 13:10:48.088293: [WITHDRAW] 4200 gold cannot be withdrawn due to insufficient funds.
+2021-02-16 19:39:28.318630: [DEPOSIT] Longsword
+2021-02-16 19:39:34.885335: [DEPOSIT] +2 Plate Armor

@@ -10,7 +10,7 @@ client = discord.Client()
 QuestPostingChannel = None
 QuestCreationChannel = None
 CharacterCreationChannel = None
-InventoryManagementChannel = None
+CharacterManagementChannel = None
 
 SuperAdmins = ["slackerlife#7167"]
 
@@ -37,6 +37,29 @@ LeveltoXP = {
     355000      :       20
 }
 
+QuestRewardXP = {
+    1 :	200,
+    2 :	450,
+    3 :	700,
+    4 :	1100,
+    5 :	1800,
+    6 :	2300,
+    7 :	2900,
+    8 :	3900,
+    9 :	5000,
+    10:	5900,
+    11:	7200,
+    12:	8400,
+    13:	10000,
+    14:	11500,
+    15:	13000,
+    16:	15000,
+    17:	18000,
+    18:	20000,
+    19:	22000,
+    20:	25000
+}
+
 
 
 # quest-board-bot
@@ -59,7 +82,7 @@ async def designate(ctx, name):
     global QuestCreationChannel
     global QuestPostingChannel
     global CharacterCreationChannel
-    global InventoryManagementChannel
+    global CharacterManagementChannel
     CreateOrExistsSetupFolder()
     setupDictionary = dict()
 
@@ -79,7 +102,7 @@ async def designate(ctx, name):
     elif name == "CharacterCreationChannel":
         CharacterCreationChannel = setupDictionary[name]
     elif name == "InventoryManagementChannel":
-        InventoryManagementChannel = setupDictionary[name]
+        CharacterManagementChannel = setupDictionary[name]
         
     io = StringIO()
     data = json.dump(setupDictionary, io)
@@ -106,28 +129,44 @@ async def create(ctx, name, backstory):
 
     await ctx.channel.send("You created " + name + ".")
 
+@bot.command()
+async def sheet(ctx, name):
+    if(ctx.channel.name != CharacterManagementChannel):
+        return
+    folder = GetCharacterFolder(ctx, name)
+    characterDictionary = {"Name": "", "Backstory": "", "XP": ""}
+    if(os.path.exists(GetCharacterFolder(ctx, name) + "/" + name + ".json")):
+        with open(GetCharacterFolder(ctx, name) + "/" + name + ".json", "r+") as fob:
+            characterDictionary = json.load(fob)
+    charXP = int(characterDictionary["XP"])
+    await ctx.channel.send("__" + name + " - Level " + str(GetCharacterLevel(charXP)) + " (" + str(charXP) + "XP)__")
+    await DoInventoryPrintout(ctx, name)
+
 # Get the current inventory of a character.
 @bot.command()
 async def inventory(ctx, name):
-    if(ctx.channel.name != InventoryManagementChannel):
+    if(ctx.channel.name != CharacterManagementChannel):
         return
+    await DoInventoryPrintout(ctx, name)
+
+
+async def DoInventoryPrintout(ctx, name):
     itemDictionary = {"GoldBalance": "0", "Items": ""}
     if(os.path.exists(GetCharacterFolder(ctx, name) + "/balance.json")):
         with open(GetCharacterFolder(ctx, name) + "/balance.json", "r+") as fob:
             itemDictionary = json.load(fob)
                 
-    await ctx.channel.send(str(ctx.author) + " your character " + name + "'s current balance is. . . ")
-    await ctx.channel.send(itemDictionary["GoldBalance"] + "gp")
-    await ctx.channel.send("Items. . .")
+    await ctx.channel.send("_Inventory of " + name + "_")
+    await ctx.channel.send(itemDictionary["GoldBalance"] + " gold pieces")
     itemList = itemDictionary["Items"].split('|')
     for item in itemList:
         if item != "":
-            await ctx.channel.send(item)
+            await ctx.channel.send("﹒" + item)
 
 # Deposit an item or money into a character's account
 @bot.command()
 async def deposit(ctx, name, amount):
-    if(ctx.channel.name != InventoryManagementChannel):
+    if(ctx.channel.name != CharacterManagementChannel):
         return
     
     folder = GetCharacterFolder(ctx, name)
@@ -140,7 +179,7 @@ async def deposit(ctx, name, amount):
 # Withdraw an item or money from a character's account.
 @bot.command()
 async def withdraw(ctx, name, amount):
-    if(ctx.channel.name != InventoryManagementChannel):
+    if(ctx.channel.name != CharacterManagementChannel):
         return
     
     folder = GetCharacterFolder(ctx, name)
@@ -153,7 +192,7 @@ async def withdraw(ctx, name, amount):
 # WIP. Transfer an item or money from one player to another.
 @bot.command()
 async def give(ctx, amount, player, name):
-    if(ctx.channel.name != InventoryManagementChannel):
+    if(ctx.channel.name != CharacterManagementChannel):
         return
     #withdraw(ctx, amount)
     s = str(player)[3:-1]
@@ -222,7 +261,8 @@ async def finishquest(ctx, questName):
             characterData = json.load(fob)
         currentXP = int(characterData["XP"])
         characterLevel = GetCharacterLevel(currentXP)
-        characterData["XP"] = str(currentXP + 300 * characterLevel)
+        questRewardXP = QuestRewardXP[characterLevel - 1]
+        characterData["XP"] = str(currentXP +  questRewardXP)
         io = StringIO()
         data = json.dump(characterData, io)
 
@@ -233,12 +273,12 @@ async def finishquest(ctx, questName):
             inventoryData = json.load(fob)
 
         currentGold = int(inventoryData["GoldBalance"])
-        additionalGold = currentGold + 100 * characterLevel
+        additionalGold = currentGold + int()
 
         if(questDictionary["AdditionalGold"] != ""):
             additionalGold += int(questDictionary["AdditionalGold"])
             
-        inventoryData["GoldBalance"] = str(currentGold + additionalGold)
+        inventoryData["GoldBalance"] = str(currentGold + int(questRewardXP / 20) + additionalGold)
 
         currentItems = inventoryData["Items"]
 
@@ -483,14 +523,14 @@ def TryLoadSetup():
     global QuestCreationChannel
     global QuestPostingChannel
     global CharacterCreationChannel
-    global InventoryManagementChannel
+    global CharacterManagementChannel
     with open("./setup.json") as fob:
         if(os.stat("./setup.json").st_size > 0):
             data = json.load(fob)
             QuestCreationChannel = data["QuestCreationChannel"]
             QuestPostingChannel = data["QuestPostingChannel"]
             CharacterCreationChannel = data["CharacterCreationChannel"]
-            InventoryManagementChannel = data["InventoryManagementChannel"]
+            CharacterManagementChannel = data["InventoryManagementChannel"]
 
     return True
 
