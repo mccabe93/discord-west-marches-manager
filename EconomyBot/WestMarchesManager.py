@@ -1,7 +1,13 @@
+#requirements:
+#discord.py
+#google drive api
+#gsheets
+
 import os
 import discord
 import datetime
 import json
+from gsheets import Sheets
 from discord.ext import commands
 from io import StringIO
 bot = commands.Bot(command_prefix='-')
@@ -11,54 +17,30 @@ QuestPostingChannel = None
 QuestCreationChannel = None
 CharacterCreationChannel = None
 CharacterManagementChannel = None
+GoogleDriveWorkbookName = None
+ClassesWorksheetName = None
+RacesWorksheetName = None
+StatPriorityWorksheetName = None
+PointBuyOptionsWorksheetName = None
+StatBonusesWorksheetName = None
+CRtoXPWorksheetName = None
+LevelToXPWorksheetName = None
 
 SuperAdmins = ["slackerlife#7167"]
 
-LeveltoXP = {
-    0           :       1,
-    300         :       2,
-    900         :       3,
-    2700        :       4,
-    6500        :       5,
-    14000       :       6,
-    23000       :       7,
-    34000       :       8,
-    48000       :       9,
-    64000       :       10,
-    85000       :       11,
-    100000      :       12,
-    120000      :       13,
-    140000      :       14,
-    165000      :       15,
-    195000      :       16,
-    225000      :       17,
-    265000      :       18,
-    305000      :       19,
-    355000      :       20
-}
+ClassTable = {}
 
-QuestRewardXP = {
-    1 :	200,
-    2 :	450,
-    3 :	700,
-    4 :	1100,
-    5 :	1800,
-    6 :	2300,
-    7 :	2900,
-    8 :	3900,
-    9 :	5000,
-    10:	5900,
-    11:	7200,
-    12:	8400,
-    13:	10000,
-    14:	11500,
-    15:	13000,
-    16:	15000,
-    17:	18000,
-    18:	20000,
-    19:	22000,
-    20:	25000
-}
+RaceTable = {}
+
+StatPriorityTable = {}
+
+PointBuyOptionsTable = {}
+
+StatBonusTable = {}
+
+CRtoXPTable = {}
+
+LevelToXPTable = {}
 
 
 
@@ -113,11 +95,44 @@ async def designate(ctx, name):
 
 # Create a character
 @bot.command()
-async def create(ctx, name, backstory):
+async def create(ctx, name, description, raceID, classID, statPriorityID, pointBuyID, statBonusID):
     if(ctx.channel.name != CharacterCreationChannel):
         return
+
+    statList = {
+        "STR" : 0,
+        "DEX": 0,
+        "CON": 0,
+        "INT": 0,
+        "WIS" : 0,
+        "CHA": 0
+        }
+    index = 0
+    for stat in StatPriorityTable[int(statPriorityID)]:
+        statList[stat] = PointBuyOptionsTable[int(pointBuyID)][index]
+        if stat in StatBonusTable[int(statBonusID)]:
+            idx = StatBonusTable[int(statBonusID)].index(stat)
+            if idx == 0:
+                statList[stat] += 2
+            else:
+                statList[stat] += 1
+        index += 1
+
     folder = GetCharacterFolder(ctx, name)
-    characterDictionary = {"Name": str(name), "Backstory": str(backstory), "XP": str(900)}
+    characterDictionary = {"Name": str(name), 
+                           "Race": RaceTable[int(raceID)][0],
+                           "RaceBookInfo": RaceTable[int(raceID)][1],
+                           "Class": ClassTable[int(classID)][0] + " " + ClassTable[int(classID)][1],
+                           "ClassBookInfo": ClassTable[int(classID)][2],
+                           "Backstory": str(description), 
+                           "STR": statList["STR"],
+                           "DEX": statList["DEX"],
+                           "CON": statList["CON"],
+                           "INT": statList["INT"],
+                           "WIS": statList["WIS"],
+                           "CHA": statList["CHA"],
+                           "XP": str(0),
+                           "Levelups": 0}
     
     io = StringIO()
     data = json.dump(characterDictionary, io)
@@ -134,13 +149,100 @@ async def sheet(ctx, name):
     if(ctx.channel.name != CharacterManagementChannel):
         return
     folder = GetCharacterFolder(ctx, name)
-    characterDictionary = {"Name": "", "Backstory": "", "XP": ""}
+    characterDictionary = {"Name": "", "Race": "", "Class": "", "Backstory": "", "STR": "", "DEX": "", "CON": "", "INT": "", "WIS": "", "CHA": "", "XP": "", "Levelups" : ""}
     if(os.path.exists(GetCharacterFolder(ctx, name) + "/" + name + ".json")):
         with open(GetCharacterFolder(ctx, name) + "/" + name + ".json", "r+") as fob:
             characterDictionary = json.load(fob)
     charXP = int(characterDictionary["XP"])
-    await ctx.channel.send("__" + name + " - Level " + str(GetCharacterLevel(charXP)) + " (" + str(charXP) + "XP)__")
+    await ctx.channel.send("```" + name + " - Level " + str(GetCharacterLevel(charXP)) + " (" + str(charXP) + "XP) - Available Levelups: " + str(characterDictionary["Levelups"]) + "\n" + characterDictionary["Race"] + " " + characterDictionary["Class"] + 
+                           "\nSTR " + str(characterDictionary["STR"]) + " - DEX " + str(characterDictionary["DEX"]) + " - CON " + str(characterDictionary["CON"]) +  " - INT - " + str(characterDictionary["INT"]) + " - WIS - " + str(characterDictionary["WIS"]) + " - CHA" +  str(characterDictionary["CHA"]) + "\n- - -\n" + characterDictionary["Backstory"] + "\n```")
     await DoInventoryPrintout(ctx, name)
+
+@bot.command()
+async def levelup(ctx, name):
+    if(ctx.channel.name != CharacterManagementChannel):
+        return
+    folder = GetCharacterFolder(ctx, name)
+    characterDictionary = {"Name": "", "Race": "", "Class": "", "Backstory": "", "STR": "", "DEX": "", "CON": "", "INT": "", "WIS": "", "CHA": "", "XP": "", "Levelups" : 0}
+    if(os.path.exists(GetCharacterFolder(ctx, name) + "/" + name + ".json")):
+        with open(GetCharacterFolder(ctx, name) + "/" + name + ".json", "r+") as fob:
+            characterDictionary = json.load(fob)
+
+    if characterDictionary["Levelups"] <= 0:
+        await ctx.channel.send("You have no levelups left.")
+        return
+        
+    characterDictionary["Levelups"] -= 1
+        
+    io = StringIO()
+    data = json.dump(characterDictionary, io)
+
+    with open(folder + "/" + characterDictionary["Name"] + ".json", "w") as fob:
+        fob.write(io.getvalue())
+        
+    with open(folder + "/log.txt", "a+") as fob:
+        fob.writelines(str(datetime.datetime.now()) + ": Leveled up feat.\n")
+
+    await ctx.channel.send("Successfully leveled up " + name + " with a feat.")
+    
+@bot.command()
+async def leveluptwostats(ctx, name, stat1, stat2):
+    if(ctx.channel.name != CharacterManagementChannel):
+        return
+    folder = GetCharacterFolder(ctx, name)
+    characterDictionary = {"Name": "", "Race": "", "Class": "", "Backstory": "", "STR": "", "DEX": "", "CON": "", "INT": "", "WIS": "", "CHA": "", "XP": "", "Levelups" : 0}
+    if(os.path.exists(GetCharacterFolder(ctx, name) + "/" + name + ".json")):
+        with open(GetCharacterFolder(ctx, name) + "/" + name + ".json", "r+") as fob:
+            characterDictionary = json.load(fob)
+
+    if characterDictionary["Levelups"] <= 0:
+        await ctx.channel.send("You have no levelups left.")
+        return
+
+    characterDictionary[stat1] += 1
+    characterDictionary[stat2] += 1
+        
+    characterDictionary["Levelups"] -= 1
+        
+    io = StringIO()
+    data = json.dump(characterDictionary, io)
+
+    with open(folder + "/" + characterDictionary["Name"] + ".json", "w") as fob:
+        fob.write(io.getvalue())
+        
+    with open(folder + "/log.txt", "a+") as fob:
+        fob.writelines(str(datetime.datetime.now()) + ": Leveled up two stats.\n")
+
+    await ctx.channel.send("Successfully leveled up " + name + "'s " + stat1 + " and " + stat2 + ".")
+    
+@bot.command()
+async def leveluponestat(ctx, name, stat1):
+    if(ctx.channel.name != CharacterManagementChannel):
+        return
+    folder = GetCharacterFolder(ctx, name)
+    characterDictionary = {"Name": "", "Race": "", "Class": "", "Backstory": "", "STR": "", "DEX": "", "CON": "", "INT": "", "WIS": "", "CHA": "", "XP": "", "Levelups" : 0}
+    if(os.path.exists(GetCharacterFolder(ctx, name) + "/" + name + ".json")):
+        with open(GetCharacterFolder(ctx, name) + "/" + name + ".json", "r+") as fob:
+            characterDictionary = json.load(fob)
+
+    if characterDictionary["Levelups"] <= 0:
+        await ctx.channel.send("You have no levelups left.")
+        return
+
+    characterDictionary[stat1] += 2
+
+    characterDictionary["Levelups"] -= 1
+        
+    io = StringIO()
+    data = json.dump(characterDictionary, io)
+
+    with open(folder + "/" + characterDictionary["Name"] + ".json", "w") as fob:
+        fob.write(io.getvalue())
+        
+    with open(folder + "/log.txt", "a+") as fob:
+        fob.writelines(str(datetime.datetime.now()) + ": Leveled up one stat.\n")
+
+    await ctx.channel.send("Successfully leveled up " + name + "'s " + stat1 + ".")
 
 # Get the current inventory of a character.
 @bot.command()
@@ -149,19 +251,18 @@ async def inventory(ctx, name):
         return
     await DoInventoryPrintout(ctx, name)
 
-
 async def DoInventoryPrintout(ctx, name):
     itemDictionary = {"GoldBalance": "0", "Items": ""}
     if(os.path.exists(GetCharacterFolder(ctx, name) + "/balance.json")):
         with open(GetCharacterFolder(ctx, name) + "/balance.json", "r+") as fob:
             itemDictionary = json.load(fob)
                 
-    await ctx.channel.send("_Inventory of " + name + "_")
-    await ctx.channel.send(itemDictionary["GoldBalance"] + " gold pieces")
     itemList = itemDictionary["Items"].split('|')
+    items = ""
     for item in itemList:
         if item != "":
-            await ctx.channel.send("﹒" + item)
+            items += "\n" + item
+    await ctx.channel.send("```Inventory of " + name + "\n" + itemDictionary["GoldBalance"] + " gold pieces" + items + "```")
 
 # Deposit an item or money into a character's account
 @bot.command()
@@ -188,21 +289,6 @@ async def withdraw(ctx, name, amount):
         return
     
     await ctx.channel.send(DoWithdraw(ctx, folder, name, amount))
-
-# WIP. Transfer an item or money from one player to another.
-@bot.command()
-async def give(ctx, amount, player, name):
-    if(ctx.channel.name != CharacterManagementChannel):
-        return
-    #withdraw(ctx, amount)
-    s = str(player)[3:-1]
-    person = bot.get_all_members()
-     # await bot.fetch_user(int(s))
-    if person is None:
-        await ctx.channel.send(player + " does not exist.")
-        return
-    await ctx.channel.send(person + " vs " + str(ctx.author))
-    return
 
 # Create a quest
 @bot.command()
@@ -244,7 +330,8 @@ async def finishquest(ctx, questName):
 
     with open(file, "r") as fob:
         questDictionary = json.load(fob)
-
+    
+    characterManagementChannel = discord.utils.get(bot.get_all_channels(), name=CharacterManagementChannel)
     players = questDictionary["Players"].split(',')
     for entry in players:
         pair = entry.split('(')
@@ -261,8 +348,11 @@ async def finishquest(ctx, questName):
             characterData = json.load(fob)
         currentXP = int(characterData["XP"])
         characterLevel = GetCharacterLevel(currentXP)
-        questRewardXP = QuestRewardXP[characterLevel - 1]
+        questRewardXP = CRtoXPTable[characterLevel][0]
         characterData["XP"] = str(currentXP +  questRewardXP)
+        if GetCharacterLevel(int(characterData["XP"])) > characterLevel:
+            await characterManagementChannel.send("Congratulations " + characterData["Name"] +  "! You've leveled up.")
+            characterData["Levelups"] += 1
         io = StringIO()
         data = json.dump(characterData, io)
 
@@ -454,12 +544,13 @@ def GetQuestMessage(questDictionary):
     return questDictionary["Name"] + " (Tier " + questDictionary["Tier"] + ")\n" + questDictionary["Time"] + "\n\n" + questDictionary["Description"] + "\n\nPlayers: " + signedUp
 
 def GetCharacterLevel(xp):
-    global LeveltoXP
+    global LevelToXPTable
     lastLevel = 1
-    for xpBracket in LeveltoXP:
-        if(xpBracket > xp):
-            return lastLevel
-        lastLevel = LeveltoXP[xpBracket]
+    for xpBracket in LevelToXPTable:
+        if type(xpBracket) == int:
+            if(xpBracket > xp):
+                return lastLevel
+            lastLevel = LevelToXPTable[xpBracket][0]
     return lastLevel
 
 def ConvertJSONtoPythonDictionary(data):
@@ -524,6 +615,15 @@ def TryLoadSetup():
     global QuestPostingChannel
     global CharacterCreationChannel
     global CharacterManagementChannel
+    global GoogleDriveWorkbookName
+    global ClassesWorksheetName
+    global RacesWorksheetName
+    global StatPriorityWorksheetName
+    global PointBuyOptionsWorksheetName 
+    global StatBonusesWorksheetName
+    global CRtoXPWorksheetName
+    global LevelToXPWorksheetName 
+
     with open("./setup.json") as fob:
         if(os.stat("./setup.json").st_size > 0):
             data = json.load(fob)
@@ -531,6 +631,14 @@ def TryLoadSetup():
             QuestPostingChannel = data["QuestPostingChannel"]
             CharacterCreationChannel = data["CharacterCreationChannel"]
             CharacterManagementChannel = data["InventoryManagementChannel"]
+            GoogleDriveWorkbookName = data["GoogleDriveWorkbookName"]
+            ClassesWorksheetName = data["ClassesWorksheetName"]
+            RacesWorksheetName = data["RacesWorksheetName"]
+            StatPriorityWorksheetName = data["StatPriorityWorksheetName"]
+            PointBuyOptionsWorksheetName = data["PointBuyOptionsWorksheetName"]
+            StatBonusesWorksheetName = data["StatBonusesWorksheetName"]
+            CRtoXPWorksheetName = data["CRtoXPWorksheetName"]
+            LevelToXPWorksheetName = data["LevelToXPWorksheetName"]
 
     return True
 
@@ -541,8 +649,71 @@ def IsAdmin(ctx):
 if(CreateOrExistsSetupFolder()):
     TryLoadSetup()
 
+def UpdateTables():
+    global GoogleDriveWorkbookName
+    global ClassesWorksheetName
+    global RacesWorksheetName
+    global StatPriorityWorksheetName
+    global PointBuyOptionsWorksheetName 
+    global StatBonusesWorksheetName
+    global CRtoXPWorksheetName
+    global LevelToXPWorksheetName 
+
+    global ClassTable
+    global RaceTable 
+    global StatPriorityTable
+    global PointBuyOptionsTable
+    global StatBonusTable
+    global CRtoXPTable
+    global LevelToXPTable
+
+    sheets = Sheets.from_files("./credentials.json", "./storage.json")
+    book = sheets.find(GoogleDriveWorkbookName)
+
+    # Classes table
+    classSheet = book.find(ClassesWorksheetName)
+    PopulateTable(classSheet, ClassTable)
+    
+    # Race table
+    raceSheet = book.find(RacesWorksheetName)
+    PopulateTable(raceSheet, RaceTable)
+
+    # Stat priority table
+    spSheet = book.find(StatPriorityWorksheetName)
+    PopulateTable(spSheet, StatPriorityTable)
+
+    # Point-buy options table
+    pbSheet = book.find(PointBuyOptionsWorksheetName)
+    PopulateTable(pbSheet, PointBuyOptionsTable)
+
+    # Stat bonuses table
+    sbSheet = book.find(StatBonusesWorksheetName)
+    PopulateTable(sbSheet, StatBonusTable)
+
+    # CR to XP table
+    crSheet = book.find(CRtoXPWorksheetName)
+    PopulateTable(crSheet, CRtoXPTable)
+
+    # Levels to XP table
+    levelSheet = book.find(LevelToXPWorksheetName)
+    PopulateTable(levelSheet, LevelToXPTable)
+
+# Adds items from sheet assuming first row is ID and following are items. Following items stored as list of strings.
+def PopulateTable(sheet, table):
+    for row in range(0, sheet.nrows):
+        items = []
+        for col in range(1, sheet.ncols):
+            try:
+                items.append(sheet.at(row, col))
+            except:
+                continue
+        table[sheet.at(row, 0)] = items
+
+UpdateTables()
+
+
 # load your bot token
-key = ""
+#key = ""
 with open("C:/dev/discord-wmm-key.txt", 'r') as fob:
     key = fob.readline()
 bot.run(key)

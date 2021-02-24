@@ -1,1 +1,15 @@
-{"QuestCreationChannel": "general", "QuestPostingChannel": "war-plans", "CharacterCreationChannel": "general", "InventoryManagementChannel": "general"}
+{
+
+  "QuestCreationChannel": "general",
+  "QuestPostingChannel": "war-plans",
+  "CharacterCreationChannel": "general",
+  "InventoryManagementChannel": "general",
+  "GoogleDriveWorkbookName": "Tangible Tables",
+  "ClassesWorksheetName": "classes",
+  "RacesWorksheetName": "races",
+  "StatPriorityWorksheetName": "Stat Priority",
+  "PointBuyOptionsWorksheetName": "point buy options",
+  "StatBonusesWorksheetName": "Stat Bonuses",
+  "CRtoXPWorksheetName": "CR vs EXP",
+  "LevelToXPWorksheetName": "LVL vs EXP"
+}
